@@ -5,10 +5,69 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 blocks:
-  - name: Test
+  - name: Install
     task:
       jobs:
-        - name: go test
+        - name: Download modules
           commands:
-            - sem-service start postgres
+            - sem-version go 1.13
             - checkout
+            - 'cache restore vendor-$SEMAPHORE_GIT_BRANCH-$(checksum go.mod),vendor-$SEMAPHORE_GIT_BRANCH,vendor-master'
+            - go mod vendor
+            - 'cache store vendor-$SEMAPHORE_GIT_BRANCH-$(checksum go.mod),vendor-$SEMAPHORE_GIT_BRANCH,vendor-master vendor'
+      env_vars:
+        - name: GO111MODULE
+          value: 'on'
+        - name: GOFLAGS
+          value: '-mod=vendor'
+  - name: Test
+    task:
+      env_vars:
+        - name: GO111MODULE
+          value: 'on'
+        - name: GOFLAGS
+          value: '-mod=vendor'
+        - name: DB_NAME
+          value: postgres
+        - name: DB_USERNAME
+          value: postgres
+        - name: DB_PASSWORD
+          value: ''
+      prologue:
+        commands:
+          - sem-version go 1.13
+          - sem-service start postgres
+          - checkout
+          - 'cache restore vendor-$SEMAPHORE_GIT_BRANCH-$(checksum go.mod),vendor-$SEMAPHORE_GIT_BRANCH,vendor-master'
+          - go mod vendor
+          - source env-sample
+      jobs:
+        - name: Test
+          commands:
+            - go test ./...
+  - name: Build
+    task:
+      env_vars:
+        - name: GO111MODULE
+          value: 'on'
+        - name: GOFLAGS
+          value: '-mod=vendor'
+        - name: DB_NAME
+          value: postgres
+        - name: DB_USERNAME
+          value: postgres
+        - name: DB_PASSWORD
+          value: ''
+      prologue:
+        commands:
+          - sem-version go 1.13
+          - sem-service start postgres
+          - checkout
+          - 'cache restore vendor-$SEMAPHORE_GIT_BRANCH-$(checksum go.mod),vendor-$SEMAPHORE_GIT_BRANCH,vendor-master'
+          - go mod vendor
+          - source env-sample
+      jobs:
+        - name: Build
+          commands:
+            - go build -v -o go-mux-api
+            - artifact push project --force go-mux-api
